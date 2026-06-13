@@ -1,0 +1,19 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+pydantic-settings==2.5.2
+python-dotenv==1.0.1
+python-multipart==0.0.9
+
+# PDF processing
+PyMuPDF==1.24.10
+
+# RAG (embeddings + similarity search, no heavy vector DB needed)
+sentence-transformers==3.0.1
+numpy==1.26.4
+
+# Free LLM provider (Groq has a generous free tier and is fast)
+groq==0.11.0
+
+# Calling free medical APIs (RxNorm, openFDA)
+requests==2.32.3
