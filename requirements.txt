@@ -1,1 +1,22 @@
--r BACKEND/requirements.txt
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+pydantic-settings==2.5.2
+python-dotenv==1.0.1
+python-multipart==0.0.9
+
+# PDF processing (using pypdf which is pure Python to avoid Windows DLL issues)
+pypdf==4.1.0
+
+# Keras compatibility fix for sentence-transformers
+tf-keras
+
+# RAG (embeddings + similarity search, no heavy vector DB needed)
+sentence-transformers==3.0.1
+numpy==1.26.4
+
+# Free LLM provider (Google Gemini)
+google-generativeai==0.8.3
+
+# Calling free medical APIs (RxNorm, openFDA)
+requests==2.32.3
