@@ -15,10 +15,19 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", message=".*ARC4.*")
 
 import os
+# Suppress TensorFlow C++ logs
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+# Suppress GRPC warnings (like ALTS creds ignored)
+os.environ["GRPC_VERBOSITY"] = "ERROR"
+os.environ["GLOG_minloglevel"] = "2"
+
+import logging
+# Suppress TensorFlow python warnings
+logging.getLogger("tensorflow").setLevel(logging.ERROR)
 
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from config.settings import APP_NAME, ALLOWED_ORIGINS
@@ -46,6 +55,12 @@ app.add_middleware(
 # Order here: rate limit check happens before logging.
 app.middleware("http")(log_requests_middleware)
 app.middleware("http")(rate_limit_middleware)
+
+
+@app.get("/")
+def root():
+    """Redirect to the interactive API documentation."""
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/health")
