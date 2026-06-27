@@ -11,3 +11,4 @@ venv/
 # Logs
 BACKEND/logs/
 *.log
+node_modules

@@ -2,7 +2,7 @@ import uuid
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from schema.common import PDFUploadResponse, PDFQuestionRequest, PDFAnswerResponse
 from services.pdf_parser import extract_text_from_pdf
-from services.rag import store_document, query_document
+from services.rag import store_document, query_document, delete_document
 from services.emergency import detect_emergency
 from services.safety import build_chat_response
 
@@ -66,3 +66,13 @@ def ask_pdf(request: PDFQuestionRequest):
     response_dict = build_chat_response(reply=raw_reply, is_emergency=False, source="pdf")
     
     return PDFAnswerResponse(**response_dict)
+
+@router.delete("/delete-pdf/{session_id}")
+def delete_pdf(session_id: str):
+    """
+    Deletes the uploaded PDF document from memory based on the session_id.
+    """
+    if delete_document(session_id):
+        return {"message": "Document deleted successfully."}
+    else:
+        raise HTTPException(status_code=404, detail="Document not found.")

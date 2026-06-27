@@ -1,102 +1,86 @@
 import os
-import numpy as np
-import google.generativeai as genai
-from services.embeddings import chunk_text, get_embeddings, model as embedding_model
+from langchain_community.vectorstores import FAISS
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.prompts import ChatPromptTemplate
 from config.settings import SYSTEM_PROMPT_PDF
 
-# Initialize Gemini client
-# Ensure GEMINI_API_KEY is in your .env file
-try:
-    api_key = os.getenv("GEMINI_API_KEY")
-    if api_key:
-        genai.configure(api_key=api_key)
-        gemini_client_configured = True
-    else:
-        gemini_client_configured = False
-except Exception as e:
-    print(f"Warning: Failed to configure Gemini. Is GEMINI_API_KEY set? {e}")
-    gemini_client_configured = False
+# Initialize embeddings model using HuggingFace
+# Uses sentence-transformers implicitly
+embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
-# In-memory document store
-# Structure: { "session_id": { "chunks": ["text1", ...], "embeddings": np.array([...]) } }
-DOCUMENT_STORE = {}
-
-
-def cosine_similarity(query_emb: np.ndarray, doc_embs: np.ndarray) -> np.ndarray:
-    """
-    Compute cosine similarity between a query embedding and a list of document embeddings.
-    """
-    if doc_embs.size == 0:
-        return np.array([])
-        
-    dot_product = np.dot(doc_embs, query_emb)
-    query_norm = np.linalg.norm(query_emb)
-    doc_norms = np.linalg.norm(doc_embs, axis=1)
-    
-    # Avoid division by zero
-    denoms = query_norm * doc_norms
-    denoms[denoms == 0] = 1e-10
-    
-    return dot_product / denoms
-
+# In-memory store of FAISS indexes per session
+# Structure: { "session_id": FAISS_VectorStore_Instance }
+VECTOR_STORES = {}
 
 def store_document(session_id: str, text: str):
     """
-    Chunks the text, calculates embeddings, and stores them in the in-memory store.
+    Chunks the text, calculates embeddings using Langchain,
+    and stores them in a new FAISS vector store mapped to the session_id.
     """
-    chunks = chunk_text(text)
-    if not chunks:
-        DOCUMENT_STORE[session_id] = {"chunks": [], "embeddings": np.array([])}
+    if not text or not text.strip():
+        VECTOR_STORES[session_id] = None
         return
 
-    embeddings = get_embeddings(chunks)
-    DOCUMENT_STORE[session_id] = {
-        "chunks": chunks,
-        "embeddings": embeddings
-    }
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=500,
+        chunk_overlap=50,
+        length_function=len,
+    )
+    chunks = text_splitter.split_text(text)
+    
+    # Create FAISS vector store from texts
+    vector_store = FAISS.from_texts(chunks, embeddings)
+    VECTOR_STORES[session_id] = vector_store
 
 
 def query_document(session_id: str, question: str, top_k: int = 3) -> str:
     """
-    Searches the stored document for relevant chunks and asks Groq to answer.
+    Searches the stored FAISS document for relevant chunks and asks 
+    Gemini via Langchain to answer.
     """
-    if session_id not in DOCUMENT_STORE:
+    if session_id not in VECTOR_STORES:
         return "Error: Document session not found. Please upload the PDF again."
-
-    store_data = DOCUMENT_STORE[session_id]
-    chunks = store_data.get("chunks", [])
-    doc_embeddings = store_data.get("embeddings", np.array([]))
-
-    if not chunks or doc_embeddings.size == 0:
+        
+    vector_store = VECTOR_STORES[session_id]
+    if vector_store is None:
         return "The uploaded document contains no readable text."
 
-    if not gemini_client_configured:
-        return "Error: Gemini API is not configured. Please set GEMINI_API_KEY."
+    # Retrieve top K most similar chunks
+    docs = vector_store.similarity_search(question, k=top_k)
+    context = "\n\n---\n\n".join([doc.page_content for doc in docs])
 
-    # Embed the question
-    query_emb = embedding_model.encode(question)
-
-    # Calculate similarities
-    similarities = cosine_similarity(query_emb, doc_embeddings)
-
-    # Get top K most similar chunks
-    # Handle the case where we have fewer chunks than top_k
-    k = min(top_k, len(similarities))
-    top_indices = np.argsort(similarities)[-k:][::-1]
-
-    # Combine top chunks into context
-    context = "\n\n---\n\n".join([chunks[i] for i in top_indices])
-
-    # Construct the prompt for Gemini
-    prompt = f"{SYSTEM_PROMPT_PDF}\n\nContext Information:\n{context}\n\nQuestion: {question}"
-
+    # Construct the chain for Gemini
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.GenerationConfig(temperature=0.1)
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return "Error: Gemini API is not configured. Please set GEMINI_API_KEY in your .env file."
+            
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
+            temperature=0.1,
+            google_api_key=api_key
         )
-        return response.text
+        
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", SYSTEM_PROMPT_PDF),
+            ("human", "Context Information:\n{context}\n\nQuestion: {question}")
+        ])
+        
+        chain = prompt | llm
+        
+        response = chain.invoke({"context": context, "question": question})
+        return response.content
     except Exception as e:
-        print(f"Error calling Gemini API: {e}")
+        print(f"Error calling Gemini API via Langchain: {e}")
         return "Sorry, I encountered an error while trying to generate the answer."
+
+def delete_document(session_id: str) -> bool:
+    """
+    Deletes the FAISS vector store associated with the session_id from memory.
+    """
+    if session_id in VECTOR_STORES:
+        del VECTOR_STORES[session_id]
+        return True
+    return False

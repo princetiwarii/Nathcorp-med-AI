@@ -11,9 +11,14 @@ pypdf==4.1.0
 # Keras compatibility fix for sentence-transformers
 tf-keras
 
-# RAG (embeddings + similarity search, no heavy vector DB needed)
-sentence-transformers==3.0.1
-numpy==1.26.4
+# RAG with LangChain and FAISS Vector Store
+langchain
+langchain-community
+langchain-huggingface
+langchain-google-genai
+faiss-cpu
+sentence-transformers
+numpy
 
 # Free LLM provider (Google Gemini)
 google-generativeai==0.8.3
