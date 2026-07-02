@@ -1,6 +1,7 @@
 import os
 import google.generativeai as genai
 from config.settings import SYSTEM_PROMPT_GENERAL
+from services.medical_api import fetch_medical_context
 
 # Initialize Gemini client
 try:
@@ -32,8 +33,18 @@ def ask_general_question(question: str) -> str:
             model_name="gemini-2.5-flash",
             system_instruction=SYSTEM_PROMPT_GENERAL
         )
+        
+        # 1. Fetch public medical context from APIs
+        api_context = fetch_medical_context(question)
+        
+        # 2. Build the augmented prompt
+        augmented_prompt = question
+        if api_context:
+            augmented_prompt = f"Public Health API Context:\n{api_context}\n\nUser Question:\n{question}"
+            
+        # 3. Generate response using the augmented prompt
         response = model.generate_content(
-            question,
+            augmented_prompt,
             generation_config=genai.GenerationConfig(temperature=0.3)
         )
         return response.text
