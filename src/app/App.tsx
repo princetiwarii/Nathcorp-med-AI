@@ -426,6 +426,15 @@ export default function App() {
                 <span className="text-xs text-rose-800 dark:text-rose-300 font-medium">Not a substitute for medical advice</span>
               </div>
               
+              <button 
+                onClick={createNewChat}
+                className="p-2 md:px-3 md:py-2 rounded-xl text-teal-600 bg-teal-50 hover:bg-teal-100 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 transition-colors flex items-center gap-2 shadow-sm"
+                title="Start a new chat"
+              >
+                <Plus className="w-5 h-5" />
+                <span className="hidden md:inline font-medium text-sm">New Chat</span>
+              </button>
+
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
