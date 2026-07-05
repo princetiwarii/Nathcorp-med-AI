@@ -8,8 +8,10 @@ python-multipart==0.0.9
 # PDF processing (using pypdf which is pure Python to avoid Windows DLL issues)
 pypdf==4.1.0
 
-# Keras compatibility fix for sentence-transformers
-tf-keras
+# FORCE PYTORCH CPU VERSION
+# This prevents downloading 2.5GB of NVIDIA CUDA binaries which crashes Render/Netlify
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
 
 # RAG (embeddings + similarity search, no heavy vector DB needed)
 sentence-transformers==3.0.1
