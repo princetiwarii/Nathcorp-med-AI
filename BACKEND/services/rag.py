@@ -1,4 +1,6 @@
 import os
+import gc
+import torch
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -6,9 +8,13 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from config.settings import SYSTEM_PROMPT_PDF
 
-# Initialize embeddings model using HuggingFace
-# Uses sentence-transformers implicitly
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+# Initialize embeddings model ONCE at startup — not per request.
+# Loading SentenceTransformer is expensive (~200MB); doing it per-upload causes OOM on Render.
+embeddings = HuggingFaceEmbeddings(
+    model_name="all-MiniLM-L6-v2",
+    model_kwargs={"device": "cpu"},       # Force CPU — no GPU on Render
+    encode_kwargs={"batch_size": 8},      # Small batches = lower peak memory per encode call
+)
 
 # In-memory store of FAISS indexes per session
 # Structure: { "session_id": FAISS_VectorStore_Instance }
@@ -29,10 +35,18 @@ def store_document(session_id: str, text: str):
         length_function=len,
     )
     chunks = text_splitter.split_text(text)
-    
-    # Create FAISS vector store from texts
-    vector_store = FAISS.from_texts(chunks, embeddings)
+
+    # torch.no_grad() prevents PyTorch from keeping gradient graphs in memory.
+    # This is pure inference — we never train — so gradients are pure waste.
+    with torch.no_grad():
+        vector_store = FAISS.from_texts(chunks, embeddings)
+
     VECTOR_STORES[session_id] = vector_store
+
+    # Explicitly free the chunks list and trigger GC to reclaim memory immediately.
+    # Without this, Python's GC may delay cleanup, causing memory to stay elevated.
+    del chunks
+    gc.collect()
 
 
 def query_document(session_id: str, question: str, top_k: int = 3) -> str:
@@ -48,7 +62,9 @@ def query_document(session_id: str, question: str, top_k: int = 3) -> str:
         return "The uploaded document contains no readable text."
 
     # Retrieve top K most similar chunks
-    docs = vector_store.similarity_search(question, k=top_k)
+    with torch.no_grad():
+        docs = vector_store.similarity_search(question, k=top_k)
+
     context = "\n\n---\n\n".join([doc.page_content for doc in docs])
 
     # Construct the chain for Gemini
@@ -82,5 +98,6 @@ def delete_document(session_id: str) -> bool:
     """
     if session_id in VECTOR_STORES:
         del VECTOR_STORES[session_id]
+        gc.collect()
         return True
     return False

@@ -17,12 +17,24 @@ async def upload_pdf(file: UploadFile = File(...)):
     if not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed.")
     
+    # Reject PDFs above 15MB before any processing to protect against OOM kills on Render
+    MAX_PDF_SIZE_MB = 15
+    
     try:
         # Read the file bytes
         file_bytes = await file.read()
+
+        if len(file_bytes) > MAX_PDF_SIZE_MB * 1024 * 1024:
+            raise HTTPException(
+                status_code=413,
+                detail=f"PDF exceeds {MAX_PDF_SIZE_MB}MB limit. Please upload a smaller file."
+            )
         
-        # Extract text using PyMuPDF
+        # Extract text using pypdf
         text = extract_text_from_pdf(file_bytes)
+
+        # Free raw bytes immediately — text extraction is done, no need to keep in memory
+        del file_bytes
         
         if not text:
             raise HTTPException(status_code=400, detail="No readable text found in PDF.")
@@ -32,14 +44,20 @@ async def upload_pdf(file: UploadFile = File(...)):
         
         # Store the document in our in-memory RAG store
         store_document(session_id, text)
+
+        # Free text string after storing (it's now chunked and embedded in FAISS)
+        del text
         
         return PDFUploadResponse(
             session_id=session_id,
             message="PDF successfully uploaded and processed. You can now ask questions about it."
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process PDF: {str(e)}")
+
 
 
 @router.post("/ask-pdf", response_model=PDFAnswerResponse)
