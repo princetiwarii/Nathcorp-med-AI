@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: nathcorp-med-ai
+    env: docker
+    dockerfilePath: ./BACKEND/Dockerfile
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: HF_TOKEN
+        sync: false

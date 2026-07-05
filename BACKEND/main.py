@@ -27,7 +27,6 @@ import logging
 logging.getLogger("tensorflow").setLevel(logging.ERROR)
 
 from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from config.settings import APP_NAME, ALLOWED_ORIGINS
@@ -42,14 +41,12 @@ from routers.chat import router as chat_router
 app = FastAPI(title=APP_NAME)
 
 # ----- CORS -----
+# NOTE: allow_origins=["*"] cannot be combined with allow_credentials=True per browser spec.
+# Since no cookies/auth-headers are used, credentials is set to False.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173", 
-        "http://localhost:3000",
-        "https://med-aii.netlify.app"
-    ],
-    allow_credentials=True, 
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -61,10 +58,9 @@ app.middleware("http")(log_requests_middleware)
 app.middleware("http")(rate_limit_middleware)
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 def root():
-    """Redirect to the interactive API documentation."""
-    return RedirectResponse(url="/docs")
+    return {"status": "Nathcorp Med AI backend running"}
 
 
 @app.get("/health")

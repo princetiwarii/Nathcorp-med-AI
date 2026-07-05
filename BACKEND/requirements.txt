@@ -5,13 +5,13 @@ pydantic-settings==2.5.2
 python-dotenv==1.0.1
 python-multipart==0.0.9
 
-# PDF processing (using pypdf which is pure Python to avoid Windows DLL issues)
+# PDF processing (pure Python, no DLL issues)
 pypdf==4.1.0
 
 # FORCE PYTORCH CPU VERSION
-# This prevents downloading 2.5GB of NVIDIA CUDA binaries which crashes Render/Netlify
+# Prevents downloading 2.5GB of NVIDIA CUDA binaries on Render/Netlify
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch
+torch==2.3.1+cpu
 
 # RAG with LangChain and FAISS Vector Store
 langchain
@@ -19,8 +19,8 @@ langchain-community
 langchain-huggingface
 langchain-google-genai
 faiss-cpu
-sentence-transformers
-numpy
+sentence-transformers==3.0.1
+numpy==1.26.4
 
 # Free LLM provider (Google Gemini)
 google-generativeai==0.8.3
